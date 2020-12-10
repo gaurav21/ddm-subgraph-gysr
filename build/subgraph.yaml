@@ -2,7 +2,7 @@ specVersion: 0.0.2
 description: GYSR is a generalized, configurable, and 100% decentralized platform for yield farming
 repository: https://github.com/gaurav21/ddm-subgraph-gysr
 schema:
-  file: ./schema.graphql
+  file: schema.graphql
 dataSources:
   - kind: ethereum/contract
     name: GeyserFactory
@@ -19,12 +19,12 @@ dataSources:
         - Geyser
       abis:
         - name: GeyserFactory
-          file: ./abis/GeyserFactory.json
+          file: GeyserFactory/abis/GeyserFactory.json
         - name: Geyser
-          file: ./abis/Geyser.json
+          file: GeyserFactory/abis/Geyser.json
         - name: ERC20
-          file: ./abis/ERC20.json
+          file: GeyserFactory/abis/ERC20.json
       eventHandlers:
         - event: GeyserCreated(indexed address,address)
           handler: handleGeyserCreated
-      file: ./src/mapping.ts
+      file: GeyserFactory/GeyserFactory.wasm

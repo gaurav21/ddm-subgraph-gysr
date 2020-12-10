@@ -1,48 +1,73 @@
-import { BigInt } from "@graphprotocol/graph-ts"
-import { Geyser, GeyserCreated } from "../generated/Geyser/Geyser"
-import { ExampleEntity } from "../generated/schema"
+// GYSR factory event handling and mapping
+
+import { Address, BigInt, log } from "@graphprotocol/graph-ts"
+import { GeyserFactory, GeyserCreated } from "../generated/GeyserFactory/GeyserFactory"
+import { Geyser as GeyserContract } from "../generated/GeyserFactory/Geyser"
+import { ERC20 } from "../generated/GeyserFactory/ERC20"
+import { Geyser, Token } from "../generated/schema"
+
 
 export function handleGeyserCreated(event: GeyserCreated): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (entity == null) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
+  // interface to actual Geyser contract
+  let contract = GeyserContract.bind(event.params.geyser);
 
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
+  // staking token
+  let stakingToken = Token.load(contract.stakingToken().toHexString())
+
+  if (stakingToken === null) {
+    stakingToken = createNewToken(contract.stakingToken());
+    stakingToken.save();
   }
 
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
+  // reward token
+  let rewardToken = Token.load(contract.rewardToken().toHexString())
 
-  // Entity fields can be set based on event parameters
-  entity.user = event.params.user
-  entity.geyser = event.params.geyser
+  if (rewardToken === null) {
+    rewardToken = createNewToken(contract.rewardToken());
+    rewardToken.save();
+  }
 
-  // Entities can be written to the store with `.save()`
-  entity.save()
+  // geyser entity
+  let geyser = new Geyser(event.params.geyser.toHexString());
+  geyser.stakingToken = stakingToken.id;
+  geyser.rewardToken = rewardToken.id;
+  geyser.bonusMin = contract.bonusMin();
+  geyser.bonusMax = contract.bonusMax();
+  geyser.bonusPeriod = contract.bonusPeriod();
+  geyser.createdBlock = event.block.number;
+  geyser.createdTimestamp = event.block.timestamp;
 
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
+  geyser.save();
+}
 
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.count(...)
-  // - contract.create(...)
-  // - contract.list(...)
-  // - contract.map(...)
+
+// helper function to define and populate new token entity
+function createNewToken(address: Address): Token {
+  let tokenContract = ERC20.bind(address);
+
+  let token = new Token(tokenContract._address.toHexString())
+  token.name = '';
+  token.symbol = '';
+  token.decimals = BigInt.fromI32(0);
+  token.totalSupply = BigInt.fromI32(0);
+
+  let resName = tokenContract.try_name();
+  if (!resName.reverted) {
+    token.name = resName.value;
+  }
+  let resSymbol = tokenContract.try_symbol();
+  if (!resSymbol.reverted) {
+    token.symbol = resSymbol.value;
+  }
+  let resDecimals = tokenContract.try_decimals();
+  if (!resDecimals.reverted) {
+    token.decimals = BigInt.fromI32(resDecimals as i32);
+  }
+  let resSupply = tokenContract.try_totalSupply();
+  if (!resSupply.reverted) {
+    token.totalSupply = BigInt.fromI32(resSupply as i32);
+  }
+
+  return token;
 }
